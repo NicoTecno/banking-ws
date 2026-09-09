@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────
+#  banking-ws — .gitignore raíz
+#  Cubre: Java/Maven (Backend) + Node/Vite (Frontend)
+# ─────────────────────────────────────────────
+
+# ── Maven / Java ──────────────────────────────
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# JAXB generated sources (se regeneran en cada build)
+Backend/target/
+
+# ── IDE ───────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# ── Node / Vite ───────────────────────────────
+node_modules/
+Frontend/node_modules/
+dist/
+Frontend/dist/
+.env
+Frontend/.env
+.env.local
+.env.*.local
+
+# ── Logs ──────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log

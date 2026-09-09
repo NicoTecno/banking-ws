@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: banking-ws
+
+server:
+  port: 8081
+
+logging:
+  level:
+    com.nicolas.bankingws: DEBUG
+    org.apache.wss4j: WARN

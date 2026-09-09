@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.nicolas</groupId>
+    <artifactId>banking-ws</artifactId>
+    <version>1.0.0</version>
+    <name>banking-ws</name>
+    <description>Servicio SOAP bancario — proyecto de aprendizaje de arquitecturas de API (SOAP / contract-first / WS-Security)</description>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <dependencies>
+        <!--
+          OJO CON EL NOMBRE: spring-boot-starter-web-services (con guión) es
+          el artifact viejo, deprecado desde Boot 4. El correcto ahora es
+          spring-boot-starter-webservices, sin guión entre "web" y
+          "services" — parte de la modularización de paquetes de Boot 4.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webservices</artifactId>
+        </dependency>
+
+        <!-- Módulo aparte para WS-Security (Wss4jSecurityInterceptor) -->
+        <dependency>
+            <groupId>org.springframework.ws</groupId>
+            <artifactId>spring-ws-security</artifactId>
+        </dependency>
+
+        <!-- JAXB explícito: el starter lo trae transitivamente, pero lo
+             dejamos explícito porque es justamente lo que genera las clases
+             del contrato a partir del XSD. -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+          wsdl4j provee javax.wsdl.* — requerido en runtime por
+          DefaultWsdl11Definition para generar el WSDL dinámico.
+          Spring-WS lo necesita pero no lo trae transitivamente en Boot 4.
+        -->
+        <dependency>
+            <groupId>wsdl4j</groupId>
+            <artifactId>wsdl4j</artifactId>
+            <version>1.6.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+              Acá pasa la magia de "contract-first": este plugin lee
+              banking.xsd y genera las clases Java (BalanceRequest,
+              TransferResponse, etc.) ANTES de compilar. No existen como
+              archivo .java en este proyecto — nacen del XSD en cada build,
+              en target/generated-sources/jaxb. Si el XSD cambia, las
+              clases cambian solas; nunca se editan a mano.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>jaxb2-maven-plugin</artifactId>
+                <version>4.1.0</version>
+                <executions>
+                    <execution>
+                        <id>xjc</id>
+                        <goals>
+                            <goal>xjc</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <sources>
+                        <source>${project.basedir}/src/main/resources/banking.xsd</source>
+                    </sources>
+                    <packageName>com.nicolas.bankingws.contract</packageName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

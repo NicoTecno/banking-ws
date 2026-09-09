@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tns="http://bankingws.nicolas.dev/schemas"
+           targetNamespace="http://bankingws.nicolas.dev/schemas"
+           elementFormDefault="qualified">
+
+    <!-- ===================== Consulta de saldo ===================== -->
+
+    <xs:element name="balanceRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="accountNumber" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="balanceResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="accountNumber" type="xs:string"/>
+                <xs:element name="ownerName" type="xs:string"/>
+                <xs:element name="balance" type="xs:decimal"/>
+                <xs:element name="currency" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ===================== Transferencia ===================== -->
+
+    <xs:element name="transferRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="fromAccount" type="xs:string"/>
+                <xs:element name="toAccount" type="xs:string"/>
+                <xs:element name="amount" type="xs:decimal"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="transferResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="transactionId" type="xs:string"/>
+                <xs:element name="status" type="xs:string"/>
+                <xs:element name="fromAccountNewBalance" type="xs:decimal"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ===================== Historial de movimientos ===================== -->
+
+    <xs:element name="transactionHistoryRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="accountNumber" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="transactionHistoryResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="transaction" type="tns:transaction" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:complexType name="transaction">
+        <xs:sequence>
+            <xs:element name="transactionId" type="xs:string"/>
+            <xs:element name="type" type="xs:string"/>
+            <xs:element name="amount" type="xs:decimal"/>
+            <xs:element name="counterpartyAccount" type="xs:string" minOccurs="0"/>
+            <xs:element name="timestamp" type="xs:dateTime"/>
+        </xs:sequence>
+    </xs:complexType>
+
+</xs:schema>
