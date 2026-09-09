@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import CredentialsBar from './components/CredentialsBar'
+import LoginScreen from './components/LoginScreen'
 import BalanceForm from './components/BalanceForm'
 import TransferForm from './components/TransferForm'
 import HistoryForm from './components/HistoryForm'
@@ -12,17 +12,32 @@ const TABS = [
 ]
 
 export default function App() {
+  const [session, setSession] = useState(null)
   const [tab, setTab] = useState('balance')
-  const [credentials, setCredentials] = useState({ username: 'nicolas', password: 'banking123' })
+
+  if (!session) {
+    return <LoginScreen onLogin={setSession} />
+  }
 
   return (
     <div className="terminal">
       <header className="terminal__header">
-        <h1>Terminal bancaria</h1>
-        <p className="terminal__subtitle">Banking WS · SOAP</p>
+        <div className="terminal__header-top">
+          <div>
+            <h1>Terminal bancaria</h1>
+            <p className="terminal__subtitle">Banking WS · SOAP</p>
+          </div>
+          <div className="session-badge">
+            <div className="session-badge__info">
+              <span className="session-badge__name">{session.name}</span>
+              <span className="session-badge__account">{session.account}</span>
+            </div>
+            <button className="session-badge__logout" onClick={() => setSession(null)}>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
       </header>
-
-      <CredentialsBar credentials={credentials} onChange={setCredentials} />
 
       <nav className="terminal__tabs" role="tablist">
         {TABS.map((t) => (
@@ -39,10 +54,11 @@ export default function App() {
       </nav>
 
       <main className="terminal__window">
-        {tab === 'balance' && <BalanceForm credentials={credentials} />}
-        {tab === 'transfer' && <TransferForm credentials={credentials} />}
-        {tab === 'history' && <HistoryForm credentials={credentials} />}
+        {tab === 'balance' && <BalanceForm session={session} />}
+        {tab === 'transfer' && <TransferForm session={session} />}
+        {tab === 'history' && <HistoryForm session={session} />}
       </main>
     </div>
   )
 }
+

@@ -3,11 +3,20 @@ package com.nicolas.bankingws.endpoint;
 import com.nicolas.bankingws.contract.*;
 import com.nicolas.bankingws.model.Account;
 import com.nicolas.bankingws.service.AccountService;
+import com.nicolas.bankingws.config.UserAccountRegistry;
+import com.nicolas.bankingws.exception.UnauthorizedException;
+import org.springframework.ws.context.MessageContext;
+import org.apache.wss4j.dom.handler.WSHandlerConstants;
+import org.apache.wss4j.dom.handler.WSHandlerResult;
+import org.apache.wss4j.dom.engine.WSSecurityEngineResult;
+import java.util.List;
+
 import org.springframework.ws.server.endpoint.annotation.Endpoint;
 import org.springframework.ws.server.endpoint.annotation.PayloadRoot;
 import org.springframework.ws.server.endpoint.annotation.RequestPayload;
 import org.springframework.ws.server.endpoint.annotation.ResponsePayload;
 
+import java.security.Principal;
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeFactory;
 import java.time.ZoneOffset;
@@ -27,14 +36,44 @@ public class BankingEndpoint {
     private static final String NAMESPACE_URI = "http://bankingws.nicolas.dev/schemas";
 
     private final AccountService accountService;
+    private final UserAccountRegistry userAccountRegistry;
 
-    public BankingEndpoint(AccountService accountService) {
+    public BankingEndpoint(AccountService accountService, UserAccountRegistry userAccountRegistry) {
         this.accountService = accountService;
+        this.userAccountRegistry = userAccountRegistry;
+    }
+
+    private void checkAuthorization(MessageContext messageContext, String targetAccount) {
+        Principal principal = null;
+        List<WSHandlerResult> results = (List<WSHandlerResult>) messageContext.getProperty(WSHandlerConstants.RECV_RESULTS);
+        if (results != null) {
+            for (WSHandlerResult result : results) {
+                List<WSSecurityEngineResult> engineResults = result.getResults();
+                for (WSSecurityEngineResult engineResult : engineResults) {
+                    if (engineResult.containsKey(WSSecurityEngineResult.TAG_PRINCIPAL)) {
+                        principal = (Principal) engineResult.get(WSSecurityEngineResult.TAG_PRINCIPAL);
+                        break;
+                    }
+                }
+                if (principal != null) break;
+            }
+        }
+        
+        if (principal == null) {
+            throw new UnauthorizedException("Unauthorized: missing security context");
+        }
+        String username = principal.getName();
+        String expectedAccount = userAccountRegistry.getAccountForUser(username);
+        
+        if (!targetAccount.equals(expectedAccount)) {
+            throw new UnauthorizedException("Unauthorized: account does not belong to the authenticated user");
+        }
     }
 
     @PayloadRoot(namespace = NAMESPACE_URI, localPart = "balanceRequest")
     @ResponsePayload
-    public BalanceResponse getBalance(@RequestPayload BalanceRequest request) {
+    public BalanceResponse getBalance(@RequestPayload BalanceRequest request, MessageContext messageContext) {
+        checkAuthorization(messageContext, request.getAccountNumber());
         Account account = accountService.findAccount(request.getAccountNumber());
 
         BalanceResponse response = new BalanceResponse();
@@ -47,7 +86,8 @@ public class BankingEndpoint {
 
     @PayloadRoot(namespace = NAMESPACE_URI, localPart = "transferRequest")
     @ResponsePayload
-    public TransferResponse transfer(@RequestPayload TransferRequest request) {
+    public TransferResponse transfer(@RequestPayload TransferRequest request, MessageContext messageContext) {
+        checkAuthorization(messageContext, request.getFromAccount());
         Account updated = accountService.transfer(request.getFromAccount(), request.getToAccount(), request.getAmount());
 
         TransferResponse response = new TransferResponse();
@@ -59,7 +99,8 @@ public class BankingEndpoint {
 
     @PayloadRoot(namespace = NAMESPACE_URI, localPart = "transactionHistoryRequest")
     @ResponsePayload
-    public TransactionHistoryResponse getHistory(@RequestPayload TransactionHistoryRequest request) {
+    public TransactionHistoryResponse getHistory(@RequestPayload TransactionHistoryRequest request, MessageContext messageContext) {
+        checkAuthorization(messageContext, request.getAccountNumber());
         TransactionHistoryResponse response = new TransactionHistoryResponse();
 
         for (com.nicolas.bankingws.model.Transaction tx : accountService.getHistory(request.getAccountNumber())) {

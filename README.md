@@ -1,6 +1,6 @@
 ﻿# banking-ws 🏦
 
-Proyecto de aprendizaje de **arquitecturas de API** — implementación de un servicio bancario con **SOAP / contract-first / WS-Security**.
+Proyecto de aprendizaje de **arquitecturas de API** — implementación de un servicio bancario con **SOAP / contract-first / WS-Security + Autorización por propiedad de cuenta**.
 
 Forma parte de una serie de proyectos que comparan distintos estilos de API (REST, SOAP, GraphQL, gRPC) sobre el mismo dominio de negocio bancario.
 
@@ -10,7 +10,7 @@ Forma parte de una serie de proyectos que comparan distintos estilos de API (RES
 
 | Capa | Tecnología |
 |---|---|
-| Backend | Java 21 · Spring Boot 4.1.1 · Spring-WS 5 · Wss4j · JAXB |
+| Backend | Java 24 · Spring Boot 4.1.1 · Spring-WS 5 · WSS4J · JAXB |
 | Frontend | React 18 · Vite · Vanilla CSS |
 | Protocolo | SOAP 1.1 · WS-Security (UsernameToken / PasswordText) |
 | Contrato | Contract-first — las clases Java se generan desde `banking.xsd` |
@@ -21,36 +21,38 @@ Forma parte de una serie de proyectos que comparan distintos estilos de API (RES
 
 ```
 banking-ws/
-├── Backend/                        # Spring Boot — servicio SOAP
+├── Backend/
 │   └── src/main/
 │       ├── java/com/nicolas/bankingws/
 │       │   ├── config/
-│       │   │   ├── CorsConfig.java         # CORS a nivel de Filter (no MVC)
-│       │   │   ├── WebServiceConfig.java   # MessageDispatcherServlet + WSDL dinámico
-│       │   │   └── WsSecurityConfig.java   # Wss4jSecurityInterceptor (UsernameToken)
+│       │   │   ├── CorsConfig.java           # CORS a nivel de Filter (no MVC)
+│       │   │   ├── UserAccountRegistry.java  # Mapa usuario → cuenta (autorización)
+│       │   │   ├── WebServiceConfig.java     # MessageDispatcherServlet + WSDL dinámico
+│       │   │   └── WsSecurityConfig.java     # Wss4jSecurityInterceptor (UsernameToken)
 │       │   ├── endpoint/
-│       │   │   └── BankingEndpoint.java    # 3 operaciones: balance, transfer, history
+│       │   │   └── BankingEndpoint.java      # 3 operaciones + checkAuthorization()
 │       │   ├── exception/
 │       │   │   ├── AccountNotFoundException.java
-│       │   │   └── InsufficientFundsException.java
+│       │   │   ├── InsufficientFundsException.java
+│       │   │   └── UnauthorizedException.java  # @SoapFault(CLIENT)
 │       │   ├── model/
 │       │   │   ├── Account.java
 │       │   │   └── Transaction.java
 │       │   └── service/
-│       │       └── AccountService.java     # Lógica de negocio + datos en memoria
+│       │       └── AccountService.java       # Lógica de negocio + datos en memoria
 │       └── resources/
 │           ├── application.yml
-│           └── banking.xsd                 # Contrato — fuente de verdad del API
-└── Frontend/                       # React + Vite — terminal bancaria
+│           └── banking.xsd                   # Contrato — fuente de verdad del API
+└── Frontend/
     └── src/
         ├── components/
+        │   ├── LoginScreen.jsx   # Login real contra SOAP + XmlViewer del intercambio
         │   ├── BalanceForm.jsx
-        │   ├── CredentialsBar.jsx
         │   ├── HistoryForm.jsx
         │   ├── TransferForm.jsx
-        │   └── XmlViewer.jsx       # Muestra el XML crudo de request y response
-        ├── soap.js                 # Cliente SOAP manual (fetch + DOMParser)
-        └── App.jsx
+        │   └── XmlViewer.jsx    # Muestra el XML crudo de request y response
+        ├── soap.js              # Cliente SOAP manual (fetch + DOMParser)
+        └── App.jsx              # Gestión de sesión: login → terminal
 ```
 
 ---
@@ -87,35 +89,37 @@ La app arranca en **`http://localhost:5173`**.
 
 ---
 
-## Cuentas de demo
+## Cuentas y credenciales de demo
 
 Los datos son **en memoria** — se resetean al reiniciar el backend.
 
-| N° de Cuenta | Titular | Saldo inicial | Moneda |
-|---|---|---|---|
-| `ACC-1001` | Nicolás Ferreyra | $500,000.00 | ARS |
-| `ACC-1002` | Julián Torres | $120,000.00 | ARS |
-| `ACC-1003` | Carla Gimenez | $75,000.00 | ARS |
+Cada usuario tiene una cuenta propia. El servidor verifica que el usuario autenticado solo pueda operar sobre **su propia cuenta** (autorización BOLA/IDOR).
+
+| Usuario | Contraseña | N° de Cuenta | Titular | Saldo inicial |
+|---|---|---|---|---|
+| `nicolas` | `banking123` | `ACC-1001` | Nicolás Ferreyra | $500,000.00 ARS |
+| `julian` | `banking456` | `ACC-1002` | Julián Torres | $120,000.00 ARS |
+| `carla` | `banking789` | `ACC-1003` | Carla Gimenez | $75,000.00 ARS |
+
+> **Nota:** Se usa `PasswordDigest` (contraseña en texto plano dentro del XML) para poder probarse fácilmente en Postman. Un sistema real usaría `PasswordDigest` + HTTPS obligatorio.
 
 ---
 
-## Credenciales WS-Security
+## Flujo de uso (Frontend)
 
-El header `<wsse:UsernameToken>` es obligatorio en cada request. Sin él el servidor devuelve un SOAP Fault.
+1. **Login** → ingresar usuario y contraseña. El frontend hace un `balanceRequest` contra el servidor SOAP para validar las credenciales. Si el servidor acepta el `<wsse:UsernameToken>`, la sesión se establece. El XML del intercambio se muestra en pantalla para evidenciar cómo viaja la autenticación SOAP.
 
-| Usuario | Contraseña |
-|---|---|
-| `nicolas` | `banking123` |
+2. **Terminal bancaria** → una vez logueado, se muestra la cuenta asociada al usuario en el badge de sesión. Todos los formularios tienen la cuenta pre-cargada y bloqueada (readonly). El usuario solo puede operar sobre su cuenta.
 
-> **Nota:** Se usa `PasswordText` (contraseña en texto plano dentro del XML) para poder probarse fácilmente en Postman. Un sistema real usaría `PasswordDigest` + HTTPS obligatorio.
+3. **Cerrar sesión** → borra el estado local. No hay cookies ni JWT — la "sesión" es solo estado React.
 
 ---
 
 ## Operaciones disponibles
 
-Todas las operaciones son `POST http://localhost:8081/ws` con `Content-Type: text/xml`.
+Todas son `POST http://localhost:8081/ws` con `Content-Type: text/xml`.
 
-### 1. Consultar saldo
+### 1. Consultar saldo (`balanceRequest`)
 
 ```xml
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -137,7 +141,7 @@ Todas las operaciones son `POST http://localhost:8081/ws` con `Content-Type: tex
 </soapenv:Envelope>
 ```
 
-### 2. Transferir fondos
+### 2. Transferir fondos (`transferRequest`)
 
 ```xml
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -161,7 +165,9 @@ Todas las operaciones son `POST http://localhost:8081/ws` con `Content-Type: tex
 </soapenv:Envelope>
 ```
 
-### 3. Historial de movimientos
+> ⚠️ Si intentás hacer una transferencia desde una cuenta que no te pertenece, el servidor devuelve un SOAP Fault con `faultCode = CLIENT`.
+
+### 3. Historial de movimientos (`transactionHistoryRequest`)
 
 ```xml
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -185,7 +191,7 @@ Todas las operaciones son `POST http://localhost:8081/ws` con `Content-Type: tex
 
 ---
 
-## Errores conocidos y cómo resolverlos
+## Errores conocidos resueltos
 
 ### `NoClassDefFoundError: javax/wsdl/extensions/ExtensibilityElement`
 
@@ -201,7 +207,7 @@ Todas las operaciones son `POST http://localhost:8081/ws` con `Content-Type: tex
 
 ### `class CorsConfig is public, should be declared in a file named CorsConfig.java`
 
-El archivo `CorsConfig-banking-ws.java` debe renombrarse a `CorsConfig.java`. Java exige que el nombre del archivo coincida exactamente con el nombre de la clase pública.
+El archivo estaba nombrado `CorsConfig-banking-ws.java`. Java exige que el nombre del archivo coincida exactamente con el nombre de la clase pública.
 
 ---
 
@@ -210,22 +216,16 @@ El archivo `CorsConfig-banking-ws.java` debe renombrarse a `CorsConfig.java`. Ja
 | Concepto | Dónde se ve |
 |---|---|
 | **Contract-first** | `banking.xsd` es la fuente de verdad; las clases Java las genera JAXB en el build |
-| **WS-Security (mensaje, no transporte)** | El `<wsse:UsernameToken>` viaja dentro del `<soap:Header>`, no en headers HTTP |
-| **SOAP Fault** | Credenciales inválidas, cuenta no encontrada o fondos insuficientes devuelven un Fault estructurado |
-| **Separación modelo/contrato** | `Account` (dominio interno) vs. `BalanceResponse` (generado desde XSD) son clases distintas a propósito |
-| **CORS en un contexto no-MVC** | Resuelto con un `CorsFilter` de servlet puro con máxima precedencia |
-
----
-
-## Pendientes / Mejoras planeadas
-
-- [ ] Agregar autorización: verificar que el usuario autenticado sea el dueño de la cuenta que opera
-- [ ] Agregar más usuarios WS (`julian`, `carla`) para que cada cuenta tenga credenciales propias
-- [ ] Login visual en el frontend con validación real contra el servidor SOAP
-- [ ] Manejo de SOAP Faults tipados desde el XSD
+| **WS-Security — Autenticación** | El `<wsse:UsernameToken>` viaja dentro del `<soap:Header>`, no en headers HTTP | El `<wsse:UsernameToken>` viaja dentro del `<soap:Header>`, no en headers HTTP |
+| **WS-Security — Autorización (BOLA/IDOR)** | `BankingEndpoint.checkAuthorization()` extrae el Principal del `WSHandlerConstants.RECV_RESULTS` y verifica que la cuenta operada pertenece al usuario autenticado |
+| **SOAP Fault tipado** | `UnauthorizedException`, `AccountNotFoundException` e `InsufficientFundsException` están anotadas con `@SoapFault` para generar faults estructurados |
+| **Separación modelo / contrato** | `Account` (dominio interno) vs `BalanceResponse` (generado por JAXB desde XSD) son clases distintas a propósito |
+| **CORS en contexto no-MVC** | Resuelto con un `CorsFilter` de servlet puro ya que `WebMvcConfigurer` no aplica en `MessageDispatcherServlet` |
+| **Login SOAP visual** | El `LoginScreen` hace un `balanceRequest` real como handshake y muestra el XML para evidenciar cómo viaja la autenticación |
 
 ---
 
 ## Licencia
 
 Proyecto de aprendizaje — sin licencia específica.
+

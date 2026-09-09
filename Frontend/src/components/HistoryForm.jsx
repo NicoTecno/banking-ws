@@ -4,8 +4,7 @@ import XmlViewer from './XmlViewer'
 
 const TYPE_LABELS = { DEBIT: 'Débito', CREDIT: 'Crédito' }
 
-export default function HistoryForm({ credentials }) {
-  const [accountNumber, setAccountNumber] = useState('ACC-1001')
+export default function HistoryForm({ session }) {
   const [transactions, setTransactions] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,8 +16,8 @@ export default function HistoryForm({ credentials }) {
     setError(null)
     try {
       const { doc, requestXml, responseXml } = await callSoap(
-        transactionHistoryRequestBody(accountNumber),
-        credentials
+        transactionHistoryRequestBody(session.account),
+        session.credentials
       )
       setTransactions(extractTransactions(doc))
       setExchange({ requestXml, responseXml })
@@ -36,7 +35,7 @@ export default function HistoryForm({ credentials }) {
       <form onSubmit={handleSubmit} className="operation__form">
         <label>
           Número de cuenta
-          <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} required />
+          <input value={session.account} readOnly />
         </label>
         <button type="submit" disabled={loading}>
           {loading ? 'Buscando…' : 'Ver historial'}

@@ -1,6 +1,12 @@
 const SOAP_URL = import.meta.env.VITE_SOAP_URL || 'http://localhost:8081/ws'
 const NS = 'http://bankingws.nicolas.dev/schemas'
 
+export const USER_ACCOUNTS = {
+  nicolas: { account: 'ACC-1001', name: 'Nicolás Ferreyra' },
+  julian: { account: 'ACC-1002', name: 'Julián Torres' },
+  carla: { account: 'ACC-1003', name: 'Carla Gimenez' },
+}
+
 function escapeXml(value) {
   return String(value).replace(/[<>&'"]/g, (c) => ({
     '<': '&lt;',
@@ -11,20 +17,57 @@ function escapeXml(value) {
   })[c])
 }
 
-function securityHeader(username, password) {
-  return `<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" soapenv:mustUnderstand="1">
+/**
+ * Genera el header WS-Security con PasswordDigest.
+ *
+ * PasswordDigest = Base64( SHA-1( nonce_bytes + created_string + password_string ) )
+ *
+ * El nonce viaja en Base64. El timestamp ISO evita ataques de replay
+ * (el servidor puede rechazar mensajes con más de N minutos de antigüedad).
+ * La contraseña NUNCA viaja en texto plano — eso es la ventaja de PasswordDigest.
+ */
+async function securityHeader(username, password) {
+  // 1. Nonce aleatorio de 16 bytes → Base64
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16))
+  const nonceB64 = btoa(String.fromCharCode(...nonceBytes))
+
+  // 2. Timestamp ISO 8601 en UTC
+  const created = new Date().toISOString()
+
+  // 3. Digest: SHA-1( nonceBytes + created (UTF-8) + password (UTF-8) )
+  const encoder = new TextEncoder()
+  const createdBytes = encoder.encode(created)
+  const passwordBytes = encoder.encode(password)
+
+  const concatenated = new Uint8Array(nonceBytes.length + createdBytes.length + passwordBytes.length)
+  concatenated.set(nonceBytes, 0)
+  concatenated.set(createdBytes, nonceBytes.length)
+  concatenated.set(passwordBytes, nonceBytes.length + createdBytes.length)
+
+  const hashBuffer = await crypto.subtle.digest('SHA-1', concatenated)
+  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(hashBuffer)))
+
+  const WSU = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd'
+  const WSSE = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'
+  const PASSWORD_DIGEST_TYPE = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest'
+  const ENCODING_TYPE = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary'
+
+  return `<wsse:Security xmlns:wsse="${WSSE}" xmlns:wsu="${WSU}" soapenv:mustUnderstand="1">
       <wsse:UsernameToken>
         <wsse:Username>${escapeXml(username)}</wsse:Username>
-        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(password)}</wsse:Password>
+        <wsse:Password Type="${PASSWORD_DIGEST_TYPE}">${hashB64}</wsse:Password>
+        <wsse:Nonce EncodingType="${ENCODING_TYPE}">${nonceB64}</wsse:Nonce>
+        <wsu:Created>${created}</wsu:Created>
       </wsse:UsernameToken>
     </wsse:Security>`
 }
 
-function buildEnvelope(bodyXml, credentials) {
+async function buildEnvelope(bodyXml, credentials) {
+  const header = await securityHeader(credentials.username, credentials.password)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Header>
-    ${securityHeader(credentials.username, credentials.password)}
+    ${header}
   </soapenv:Header>
   <soapenv:Body>
     ${bodyXml}
@@ -66,7 +109,7 @@ function extractFaultMessage(doc) {
  * viajaron por la red — esa es la parte más honesta de mostrar SOAP.
  */
 export async function callSoap(bodyXml, credentials) {
-  const requestXml = buildEnvelope(bodyXml, credentials)
+  const requestXml = await buildEnvelope(bodyXml, credentials)
 
   const response = await fetch(SOAP_URL, {
     method: 'POST',

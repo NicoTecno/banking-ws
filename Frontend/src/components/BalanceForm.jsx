@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { callSoap, balanceRequestBody } from '../soap'
 import XmlViewer from './XmlViewer'
 
-export default function BalanceForm({ credentials }) {
-  const [accountNumber, setAccountNumber] = useState('ACC-1001')
+export default function BalanceForm({ session }) {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -14,7 +13,7 @@ export default function BalanceForm({ credentials }) {
     setLoading(true)
     setError(null)
     try {
-      const { textOf, requestXml, responseXml } = await callSoap(balanceRequestBody(accountNumber), credentials)
+      const { textOf, requestXml, responseXml } = await callSoap(balanceRequestBody(session.account), session.credentials)
       setResult({
         accountNumber: textOf('accountNumber'),
         ownerName: textOf('ownerName'),
@@ -36,7 +35,7 @@ export default function BalanceForm({ credentials }) {
       <form onSubmit={handleSubmit} className="operation__form">
         <label>
           Número de cuenta
-          <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} required />
+          <input value={session.account} readOnly />
         </label>
         <button type="submit" disabled={loading}>
           {loading ? 'Consultando…' : 'Consultar'}

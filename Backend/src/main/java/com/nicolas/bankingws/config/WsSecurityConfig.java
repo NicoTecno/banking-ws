@@ -15,11 +15,12 @@ import java.util.Properties;
  * no son HTTPS de punta a punta (un proxy, una cola de mensajes) — la
  * garantía va pegada al mensaje, no al canal que lo transporta.
  *
- * Para que se pueda probar a mano en Postman sin herramientas de WS-Security
- * aparte, esto usa PasswordText (la contraseña viaja en texto plano dentro
- * del XML). Un sistema real usaría PasswordDigest — un hash con nonce y
- * timestamp que Postman no puede armar a mano — combinado con HTTPS
- * obligatorio en el transporte.
+ * El frontend usa PasswordDigest: la contraseña nunca viaja en texto plano.
+ * El cliente calcula Base64(SHA-1(nonce + created + password)) y lo envía
+ * junto con el nonce y el timestamp. El servidor (SimplePasswordValidationCallbackHandler)
+ * obtiene el password en claro de su mapa, recalcula el digest y lo compara.
+ * Si no coincide → SOAP Fault. Si un atacante intercepta el mensaje, solo
+ * ve el hash — no puede recuperar la contraseña original.
  */
 @Configuration
 public class WsSecurityConfig {
@@ -37,6 +38,8 @@ public class WsSecurityConfig {
         SimplePasswordValidationCallbackHandler handler = new SimplePasswordValidationCallbackHandler();
         Properties users = new Properties();
         users.setProperty("nicolas", "banking123");
+        users.setProperty("julian", "banking456");
+        users.setProperty("carla", "banking789");
         handler.setUsers(users);
         return handler;
     }

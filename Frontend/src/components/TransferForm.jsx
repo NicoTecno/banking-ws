@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { callSoap, transferRequestBody } from '../soap'
 import XmlViewer from './XmlViewer'
 
-export default function TransferForm({ credentials }) {
-  const [fromAccount, setFromAccount] = useState('ACC-1001')
+export default function TransferForm({ session }) {
   const [toAccount, setToAccount] = useState('ACC-1002')
   const [amount, setAmount] = useState('5000.00')
   const [result, setResult] = useState(null)
@@ -17,8 +16,8 @@ export default function TransferForm({ credentials }) {
     setError(null)
     try {
       const { textOf, requestXml, responseXml } = await callSoap(
-        transferRequestBody(fromAccount, toAccount, amount),
-        credentials
+        transferRequestBody(session.account, toAccount, amount),
+        session.credentials
       )
       setResult({
         transactionId: textOf('transactionId'),
@@ -38,10 +37,6 @@ export default function TransferForm({ credentials }) {
     <div className="operation">
       <h2>Transferir</h2>
       <form onSubmit={handleSubmit} className="operation__form operation__form--grid">
-        <label>
-          Desde
-          <input value={fromAccount} onChange={(e) => setFromAccount(e.target.value)} required />
-        </label>
         <label>
           Hacia
           <input value={toAccount} onChange={(e) => setToAccount(e.target.value)} required />
